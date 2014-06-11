@@ -64,7 +64,7 @@ if (empty($includeContent) && empty($useWeblinkUrl)) {
 $select = array($class => implode(',',$resourceColumns));
 
 // Add custom parameters
-foreach (array('where','select') as $v) {
+foreach (array('select') as $v) {
 	if (!empty($scriptProperties[$v])) {
 		$tmp = $modx->fromJSON($scriptProperties[$v]);
 		if (is_array($tmp)) {
@@ -73,6 +73,7 @@ foreach (array('where','select') as $v) {
 	}
 	unset($scriptProperties[$v]);
 }
+unset($scriptProperties['where']);
 $pdoFetch->addTime('Conditions prepared');
 
 // Default parameters

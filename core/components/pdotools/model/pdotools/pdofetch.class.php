@@ -735,6 +735,26 @@ class pdoFetch extends pdoTools {
 		return $where;
 	}
 
+	/**
+	 * Returns array describing TV field
+	 * @param $list
+	 * @return array
+	 */
+	public function getTVs($list) {
+		$c = $this->modx->newQuery('modTemplateVar');
+		$c->select('*');
+		$c->where(array("`modTemplateVar`.name:IN"=>$list));
+		$rows= xPDOObject::_loadRows($this->modx, 'modTemplateVar', $c);
+		$arResult=array();
+		while($tv=$rows->fetch(PDO::FETCH_ASSOC)) {
+			$arRow=array();
+			foreach($tv as $key=>$val) {
+				$arRow[str_replace('modTemplateVar_','',$key)]=$val;
+			}
+			$arResult[$arRow['name']]=$arRow;
+		}
+		return $arResult;
+	}
 
 	/**
 	 * Convert tvFilters string to SQL and add to "where" condition
@@ -777,10 +797,10 @@ class pdoFetch extends pdoTools {
 			}
 		}
 
-		$conditions = array();
+		$arWhere=array();
 		foreach ($tvFilters as $tvFilter) {
-			$condition = array();
 			$filters = explode($tvFiltersAndDelimiter, $tvFilter);
+			$arAndItem=array();
 			foreach ($filters as $filter) {
 				$operator = '==';
 				$sqlOperator = 'LIKE';
@@ -795,7 +815,30 @@ class pdoFetch extends pdoTools {
 				if (!in_array($filter[0], $includeTVs)) {
 					$includeTVs[] = $filter[0];
 				}
-				$condition[] = $filter[0] . ' ' . $sqlOperator . ' ' . $this->modx->quote($filter[1]);
+				$arAndItem[]=array(
+					$filter[0],$sqlOperator,$this->modx->quote($filter[1])
+				);
+			}
+			$arWhere[]=$arAndItem;
+		}
+
+		$arTVs=$this->getTVs($includeTVs);
+
+		$conditions = array();
+		foreach ($arWhere as $arAndItems) {
+			$condition = array();
+			foreach ($arAndItems as $arItem) {
+				if(isset($arTVs[$arItem[0]])) {
+					switch($arTVs[$arItem[0]]['type']) {
+						case 'number':
+							$condition[] = 'CAST('.$arItem[0].' AS DECIMAL(11,2))' . ' ' . $arItem[1] . ' ' . $arItem[2];
+							break;
+						default:
+							$condition[] = $arItem[0] . ' ' . $arItem[1] . ' ' . $arItem[2];
+					}
+				} else {
+					$condition[] = $arItem[0] . ' ' . $arItem[1] . ' ' . $arItem[2];
+				}
 			}
 			$conditions[] = implode(' AND ', $condition);
 		}
@@ -915,6 +958,20 @@ class pdoFetch extends pdoTools {
 			}
 			elseif (is_string($where) && ($where[0] == '{' || $where[0] == '[')) {
 				$where = $instance->modx->fromJSON($where);
+			}
+			if (!empty($this->config['where'])) {
+				$tmp = $this->config['where'];
+				if (is_string($tmp) && ($tmp[0] == '{' || $tmp[0] == '[')) {
+					$tmp = $this->modx->fromJSON($tmp);
+				}
+				if (!is_array($tmp)) {
+					$tmp = array($tmp);
+				}
+				if(is_array($where)) {
+					$where=array_merge($where,$this->replaceTVCondition($tmp));
+				} else {
+					$where=$this->replaceTVCondition($tmp);
+				}
 			}
 			if (is_array($where)) {
 				$config['where'] = $where;
